@@ -33,14 +33,14 @@ import random
 import re
 import sys
 import time
-
+from functools import reduce
 
 # Given a board of size NxN (N=9, 19, ...), we represent the position
 # as an (N+1)*(N+2) string, with '.' (empty), 'X' (to-play player),
 # 'x' (other player), and whitespace (off-board border to make rules
 # implementation easier).  Coordinates are just indices in this string.
 # You can simply print(board) when debugging.
-N = 13
+N = 9
 W = N + 2
 empty = "\n".join([(N+1)*' '] + N*[' '+N*'.'] + [(N+2)*' '])
 colstr = 'ABCDEFGHJKLMNOPQRST'
@@ -149,7 +149,7 @@ def board_put(board, c, p):
 def floodfill(board, c):
     """ replace continuous-color area starting at c with special color # """
     # This is called so much that a bytearray is worthwhile...
-    byteboard = bytearray(board)
+    byteboard = bytearray(board, 'ascii')
     p = byteboard[c]
     byteboard[c] = ord('#')
     fringe = [c]
@@ -159,7 +159,7 @@ def floodfill(board, c):
             if byteboard[d] == p:
                 byteboard[d] = ord('#')
                 fringe.append(d)
-    return str(byteboard)
+    return byteboard.decode('ascii')
 
 
 # Regex that matches various kind of points adjecent to '#' (floodfilled) points
@@ -539,7 +539,7 @@ def load_large_patterns(f):
     for line in f:
         # line: 0.004 14 3842 (capture:17 border:0 s:784)
         p = float(line.split()[0])
-        m = re.search('s:(\d+)', line)
+        m = re.search(r's:(\d+)', line)
         if m is not None:
             s = int(m.groups()[0])
             large_patterns[s] = p
@@ -1010,7 +1010,7 @@ def game_io(computer_black=False):
         if not (tree.pos.n == 0 and computer_black):
             print_pos(tree.pos, sys.stdout, owner_map)
 
-            sc = raw_input("Your move: ")
+            sc = input("Your move: ")
             try:
                 c = parse_coord(sc)
             except:
@@ -1023,7 +1023,7 @@ def game_io(computer_black=False):
                     continue
 
                 # Find the next node in the game tree and proceed there
-                nodes = filter(lambda n: n.pos.last == c, tree.children)
+                nodes = [n for n in tree.children if n.pos.last == c]
                 if not nodes:
                     print('Bad move (rule violation)')
                     continue
@@ -1065,13 +1065,13 @@ def gtp_io():
 
     while True:
         try:
-            line = raw_input().strip()
+            line = input().strip()
         except EOFError:
             break
         if line == '':
             continue
         command = [s.lower() for s in line.split()]
-        if re.match('\d+', command[0]):
+        if re.match(r'\d+', command[0]):
             cmdid = command[0]
             command = command[1:]
         else:
@@ -1094,8 +1094,9 @@ def gtp_io():
             c = parse_coord(command[2])
             if c is not None:
                 # Find the next node in the game tree and proceed there
-                if tree.children is not None and filter(lambda n: n.pos.last == c, tree.children):
-                    tree = filter(lambda n: n.pos.last == c, tree.children)[0]
+                matches = [n for n in tree.children if n.pos.last == c] if tree.children is not None else []
+                if matches:
+                    tree = matches[0]
                 else:
                     # Several play commands in row, eye-filling move, etc.
                     tree = TreeNode(pos=tree.pos.move(c))
